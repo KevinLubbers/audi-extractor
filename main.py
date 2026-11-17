@@ -1,6 +1,8 @@
 import easygui
 import pdfplumber
 import re
+import json
+from datetime import datetime
 
 file_path = easygui.fileopenbox(title="Select the Audi PDF to Convert", filetypes=["*.pdf"])
 file_name = file_path.split("\\")[-1]
@@ -8,9 +10,17 @@ whole_text = ""
 if file_path:
     #open file and extract text from each page
     with pdfplumber.open(file_path) as pdf:
-        for page in pdf.pages:
+        total_pages = len(pdf.pages)
+        for page_num, page in enumerate(pdf.pages, start=1):
             text = page.extract_text()
             whole_text += text
+            progress = (page_num / total_pages)
+            bar_length = 30
+            filled = int(bar_length * progress)
+            bar = "█" * filled + "-" * (bar_length - filled)
+            print(f"\rProgress: |{bar}| {progress:.0%} ({page_num}/{total_pages})", end="", flush=True)
+        #moves cursor to next line after progress bar finishes
+        print()
 
     #pattern that selects the text from *MDL pricing to just after exterior paints
     #this allows us to loop through each chunk of text, knowing it is one model
@@ -32,7 +42,6 @@ if file_path:
     #simplified creating our data structure by looping over regex matches instead of needing to parse each model out of each line
     model_list = []
     for each_match in each_model_text:
-        temp_model_list = []
         temp_option_list = []
         #creating and OEM model code *MDL pricing 
         raw_model_text = model_pattern.findall(each_match)[0].replace(",", "").replace("$", "").split(" ")
@@ -78,7 +87,22 @@ if file_path:
                 paint_invoice = "0"
             temp_option_list.append({"option": option_code, "name": option_name, "invoice": int(paint_invoice), "msrp": int(paint_msrp), "type": "Color"})
 
-        temp_model_list.append({"model": model_code, "options": temp_option_list})
-        model_list.append(temp_model_list)
+        model_list.append({"model": model_code, "options": temp_option_list})
         #end each model loop
     print(model_list)
+
+    file_date = f"Audi_Sanitized_{file_name}-" + datetime.now().strftime("%Y-%m-%d_%H-%M")
+    save_file_path = easygui.filesavebox(
+    default=f"{file_date}",
+    filetypes=["*.json"],
+    title="Choose where to save the extracted Order Guide")
+
+    if save_file_path is None:
+        print("No file selected. Exiting.")
+        exit()
+    if not save_file_path.endswith('.json'):
+        save_file_path += '.json'
+        
+    with open(save_file_path, "w") as outfile:
+        json.dump(model_list, outfile, indent=2)
+        print(f"JSON dumped to {save_file_path}")
