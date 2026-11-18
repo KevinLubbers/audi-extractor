@@ -34,6 +34,7 @@ if file_path:
     metallic_paint_pattern = re.compile(r"(?<=Metallic or pearl effect paint:\s\$)\d{1,3},?\d{1,3}\s\$\d{1,3},?\d{1,3}|(?<=Metallic or pearl effect paint:\s)-\s-")
     #includes options with no price
     option_pattern = re.compile(r"\b\w{3}\s\$\d{1,3},?\d{1,3}\s\$\d{1,3},?\d{1,3}|\b\w{3}\s\$0\s\$0")
+    option_text_pattern = re.compile(r"STANDARD FEATURES(?:(?!Port Installed Accessories\n|EXTERIOR COLOR).*\n)*(?:EXTERIOR COLOR|Port Installed Accessories\n)")
     port_installed_text_pattern = re.compile(r"PORT INSTALLED(?:(?!EXTERIOR COLOR / CODE\n).*\n)*(?:EXTERIOR COLOR / CODE\n)")
     #uses multi line RegEx - Keep in mind to use flags=re.MULTILINE
     paint_pattern = re.compile(r"(?P<normal_paint_order>^.*\n^(?:X\s?|-\s?|x\s?)+\n^[A-Z0-9]{4}\b)|(?P<odd_order_paint>^.*\n^[A-Z0-9]{4}\b)", flags=re.MULTILINE)
@@ -50,25 +51,35 @@ if file_path:
         model_code = raw_model_text[0]
         model_msrp = raw_model_text[1]
         model_invoice = raw_model_text[2]
-        temp_option_list.append({"option": "*MDL", "name": "Base Price", "invoice": int(model_invoice), "msrp": model_msrp, "type": "Price"})
+        temp_option_list.append({"option": "*MDL", "name": "Base Price", "invoice": int(model_invoice), "msrp": int(model_msrp), "type": "Price"})
 
         dfrt_raw = dfrt_pattern.findall(each_match)[0].replace(",", "").replace("$", "").split(" ")
         dfrt_msrp = dfrt_raw[0]
         dfrt_invoice = dfrt_raw[1]
-        temp_option_list.append({"option": "DFRT", "name": "Destination Charge", "invoice": int(dfrt_invoice), "msrp": dfrt_msrp, "type": "Price"})
+        temp_option_list.append({"option": "DFRT", "name": "Destination Charge", "invoice": int(dfrt_invoice), "msrp": int(dfrt_msrp), "type": "Price"})
 
         #replace - for $0
         metallic_paint_raw = metallic_paint_pattern.findall(each_match)[0].replace(",", "").replace("$", "").replace("-", "0").split(" ")
         metallic_paint_msrp = metallic_paint_raw[0]
         metallic_paint_invoice = metallic_paint_raw[1]
 
-        options_raw = option_pattern.findall(each_match)
+        options_raw = option_pattern.findall(option_text_pattern.findall(each_match)[0])
         for each_option in options_raw:
             option = each_option.replace(",", "").replace("$", "").split(" ")
             option_code = option[0]
             option_msrp = option[1]
             option_invoice = option[2]
-            temp_option_list.append({"option": option_code, "invoice": int(option_invoice), "msrp": option_msrp, "type": "IND"})
+            temp_option_list.append({"option": option_code, "invoice": int(option_invoice), "msrp": int(option_msrp), "type": "IND"})
+
+        port_text_matches = port_installed_text_pattern.findall(each_match)
+        if port_text_matches:
+            port_options_raw = option_pattern.findall(port_text_matches[0])
+            for each_option in port_options_raw:
+                option = each_option.replace(",", "").replace("$", "").split(" ")
+                option_code = option[0]
+                option_msrp = option[1]
+                option_invoice = option[2]
+                temp_option_list.append({"option": option_code, "invoice": int(option_invoice), "msrp": int(option_msrp), "type": "PORT"})
 
         interiors_raw = interior_pattern.findall(each_match)[0].replace("(", "").replace(")", "")
         only_interiors = re.compile(r"\b[A-Z]{2}\b").findall(interiors_raw)
