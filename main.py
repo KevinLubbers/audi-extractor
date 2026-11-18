@@ -34,8 +34,10 @@ if file_path:
     metallic_paint_pattern = re.compile(r"(?<=Metallic or pearl effect paint:\s\$)\d{1,3},?\d{1,3}\s\$\d{1,3},?\d{1,3}|(?<=Metallic or pearl effect paint:\s)-\s-")
     #includes options with no price
     option_pattern = re.compile(r"\b\w{3}\s\$\d{1,3},?\d{1,3}\s\$\d{1,3},?\d{1,3}|\b\w{3}\s\$0\s\$0")
+    port_installed_text_pattern = re.compile(r"PORT INSTALLED(?:(?!EXTERIOR COLOR / CODE\n).*\n)*(?:EXTERIOR COLOR / CODE\n)")
     #uses multi line RegEx - Keep in mind to use flags=re.MULTILINE
-    paint_pattern = re.compile(r"^.*\n^(?:X\s?|-\s?|x\s?)+\n^[A-Z0-9]{4}\b", flags=re.MULTILINE)
+    paint_pattern = re.compile(r"(?P<normal_paint_order>^.*\n^(?:X\s?|-\s?|x\s?)+\n^[A-Z0-9]{4}\b)|(?P<odd_order_paint>^.*\n^[A-Z0-9]{4}\b)", flags=re.MULTILINE)
+    paint_text_pattern = re.compile(r"EXTERIOR COLOR(?:(?!INTERIOR COMPONENT OPTIONS\n).*\n)*(?:INTERIOR COMPONENT OPTIONS\n)")
     #paint_pattern = re.compile(r"^(?:\w+\s)+\w+\n?\r?^(?:X\s|-\s)*^\b\d[A-Z]\d[A-Z]|^(?:\w+\s)+\w+\n?\r?^(?:X\s|-\s)*^\b[A-Z]\d[A-Z]\d", flags=re.MULTILINE)
     interior_pattern = re.compile(r"\b(?:(?!\n|IN)\(?[A-Z]{2}\)?\s.*){1,8}(?=EXTERIOR COLOR \/)")
 
@@ -74,11 +76,18 @@ if file_path:
             option_code = each_interior
             temp_option_list.append({"option": option_code, "invoice": 0, "msrp": 0, "type": "INT"})
         
-        paints = paint_pattern.findall(each_match)
+        paints = paint_pattern.finditer(paint_text_pattern.findall(each_match)[0])
         for each_paint in paints:
-            split_text = each_paint.split("\n")
-            option_name = re.sub(r"\s*\([^)]*\)", "",split_text[0]).strip()
-            option_code = split_text[2]
+            if each_paint.group("normal_paint_order"):
+                each_paint = each_paint.group("normal_paint_order")
+                split_text = each_paint.split("\n")
+                option_name = re.sub(r"\s*\([^)]*\)", "",split_text[0]).strip()
+                option_code = split_text[2]
+            elif each_paint.group("odd_order_paint"):
+                each_paint = each_paint.group("odd_order_paint")
+                split_text = each_paint.split("\n")
+                option_name = re.sub(r"\s*\([^)]*\)", "",split_text[0]).strip()
+                option_code = split_text[1]
             if "metallic" in option_name.lower() or "pearl" in option_name.lower():
                 paint_msrp = metallic_paint_msrp
                 paint_invoice = metallic_paint_invoice
@@ -89,11 +98,11 @@ if file_path:
 
         model_list.append({"model": model_code, "options": temp_option_list})
         #end each model loop
-    print(model_list)
+    #print(model_list)
 
-    file_date = f"Audi_Sanitized_{file_name}-" + datetime.now().strftime("%Y-%m-%d_%H-%M")
+    file_date = f"Audi_Sanitized_{file_name}-{datetime.now().strftime("%Y-%m-%d_%H-%M")}.json"
     save_file_path = easygui.filesavebox(
-    default=f"{file_date}",
+    default=file_date,
     filetypes=["*.json"],
     title="Choose where to save the extracted Order Guide")
 
